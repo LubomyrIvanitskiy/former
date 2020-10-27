@@ -1,5 +1,4 @@
-from former import util
-from util import mask_
+from former.util.util import mask_
 
 import torch
 from torch import nn
