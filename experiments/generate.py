@@ -39,7 +39,7 @@ def sample(lnprobs, temperature=1.0):
 
     return cd.sample()
 
-def enwik8(path, n_train=int(90e6), n_valid=int(5e6), n_test=int(5e6)):
+def enwik8(path, n_train=int(695766), n_valid=int(5e4), n_test=int(5e4)):
     """
     Load the enwik8 dataset from the Hutter challenge.
 
@@ -51,7 +51,8 @@ def enwik8(path, n_train=int(90e6), n_valid=int(5e6), n_test=int(5e6)):
     :return:
     """
     with gzip.open(path) if path.endswith('.gz') else open(path) as file:
-        X = np.fromstring(file.read(n_train + n_valid + n_test), dtype=np.uint8)
+        X = np.array([ord(ch) for ch in file.read(n_train + n_valid + n_test)])
+        print("".join([str(chr(X[i])) for i in range(4000, 4600)]))
         trX, vaX, teX = np.split(X, [n_train, n_train + n_valid])
         return torch.from_numpy(trX), torch.from_numpy(vaX), torch.from_numpy(teX)
 
@@ -66,7 +67,7 @@ def go(arg):
     tbw = SummaryWriter(log_dir=arg.tb_dir) # Tensorboard logging
 
     # load the data (validation unless arg.final is true, then test)
-    arg.data = here('data/enwik8.gz') if arg.data is None else arg.data
+    arg.data = here('../wiki_uk.txt') if arg.data is None else arg.data
 
     data_train, data_val, data_test = enwik8(arg.data)
     data_train, data_test = (torch.cat([data_train, data_val], dim=0), data_test) \
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument("-N", "--num-batches",
                         dest="num_batches",
                         help="Number of batches to train on. Each batch contains randomly sampled subsequences of the data.",
-                        default=1_000_000, type=int)
+                        default=100, type=int)
 
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
@@ -248,7 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("--test-every",
                         dest="test_every",
                         help="How many batches between tests.",
-                        default=1500, type=int)
+                        default=20, type=int)
 
     parser.add_argument("--test-subset",
                         dest="test_subset",
