@@ -18,7 +18,7 @@ import random, tqdm, sys, math, gzip
 
 # NB, the enwik8 data contains tokens from 9 to 240, but well round up to the nearest
 # power of two.
-NUM_TOKENS = 256
+NUM_TOKENS = 128
 # Used for converting between nats and bits
 LOG2E = math.log2(math.e)
 
@@ -39,7 +39,7 @@ def sample(lnprobs, temperature=1.0):
 
     return cd.sample()
 
-uk_letters = "абвгґдеєжзиійїклмнопрстуфхцчшщьюя"
+uk_letters = "абвгґдеєжзиійїклмнопрстуфхцчшщьюяqwertyuiopasdfghj"
 uk_letters += uk_letters.upper()
 uk_letters +="',.!?/-:;\" _1234567890+-=$()"
 uk_letters
@@ -189,15 +189,14 @@ def go(arg):
 
                 print('[', end='', flush=True)
                 for c in input:
-                    if c.item() in id_to_char:
-                      print(str(id_to_char[c.item()]), end='', flush=True)
+                    print(str(id_to_char[c.item()]), end='', flush=True)
                 print(']', end='', flush=True)
 
                 for _ in range(GENSIZE):
                     output = model(input[None, :])
+                    print(output.shape)
                     c = sample(output[0, -1, :], TEMP)
-                    if c.item() in id_to_char:
-                      print(str(id_to_char[c.item()]), end='', flush=True)
+                    print(str(id_to_char[c.item()]), end='', flush=True)
                     input = torch.cat([input[1:], c[None]], dim=0)
 
                 print()
@@ -236,11 +235,11 @@ if __name__ == "__main__":
 
     parser.add_argument("-E", "--embedding", dest="embedding_size",
                         help="Size of the character embeddings.",
-                        default=128, type=int)
+                        default=94, type=int)
 
     parser.add_argument("-H", "--heads", dest="num_heads",
                         help="Number of attention heads.",
-                        default=8, type=int)
+                        default=2, type=int)
 
     parser.add_argument("-C", "--context", dest="context",
                         help="Length of the sequences extracted from the corpus (and the context used during inference).",
