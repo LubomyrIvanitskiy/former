@@ -51,7 +51,7 @@ def enwik8(path, n_train=int(695766), n_valid=int(5e4), n_test=int(5e4)):
     :return:
     """
     with gzip.open(path) if path.endswith('.gz') else open(path) as file:
-        X = np.array([ord(ch) for ch in file.read(n_train + n_valid + n_test)])
+        X = np.fromstring(file.read(n_train + n_valid + n_test), dtype=np.uint8)
         print("".join([str(chr(X[i])) for i in range(4000, 4600)]))
         trX, vaX, teX = np.split(X, [n_train, n_train + n_valid])
         return torch.from_numpy(trX), torch.from_numpy(vaX), torch.from_numpy(teX)
