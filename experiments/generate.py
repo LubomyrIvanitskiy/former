@@ -39,6 +39,14 @@ def sample(lnprobs, temperature=1.0):
 
     return cd.sample()
 
+uk_letters = "абвгґдеєжзиійїклмнопрстуфхцчшщьюя"
+uk_letters += uk_letters.upper()
+uk_letters +="',.!?/-:;\" _1234567890+-=$()"
+uk_letters
+
+char_to_id = {ch:i for i, ch in enumerate(uk_letters)}
+id_to_char = {i:ch for i, ch in enumerate(uk_letters)}
+
 def enwik8(path, n_train=int(695766), n_valid=int(5e4), n_test=int(5e4)):
     """
     Load the enwik8 dataset from the Hutter challenge.
@@ -51,8 +59,8 @@ def enwik8(path, n_train=int(695766), n_valid=int(5e4), n_test=int(5e4)):
     :return:
     """
     with gzip.open(path) if path.endswith('.gz') else open(path) as file:
-        X = np.fromstring(file.read(n_train + n_valid + n_test), dtype=np.uint8)
-        print("".join([str(chr(X[i])) for i in range(4000, 4600)]))
+        X = np.array([char_to_id[ch] for ch in file.read(n_train + n_valid + n_test) if ch in char_to_id])
+        print("".join([str(id_to_char[X[i]]) for i in range(4000, 4600)]))
         trX, vaX, teX = np.split(X, [n_train, n_train + n_valid])
         return torch.from_numpy(trX), torch.from_numpy(vaX), torch.from_numpy(teX)
 
@@ -181,14 +189,15 @@ def go(arg):
 
                 print('[', end='', flush=True)
                 for c in input:
-                    print(str(chr(c)), end='', flush=True)
+                    if c.item() in id_to_char:
+                      print(str(id_to_char[c.item()]), end='', flush=True)
                 print(']', end='', flush=True)
 
                 for _ in range(GENSIZE):
                     output = model(input[None, :])
                     c = sample(output[0, -1, :], TEMP)
-                    print(str(chr(max(32, c))), end='', flush=True)
-
+                    if c.item() in id_to_char:
+                      print(str(id_to_char[c.item()]), end='', flush=True)
                     input = torch.cat([input[1:], c[None]], dim=0)
 
                 print()
