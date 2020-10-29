@@ -12,8 +12,9 @@ def make_corpus(in_f, out_f):
     output = open(out_f, 'w')
     # https://radimrehurek.com/gensim/corpora/wikicorpus.html
     # https://stackoverflow.com/questions/50697092/how-to-get-the-wikipedia-corpus-text-with-punctuation-by-using-gensim-wikicorpus
+    print("Wiki dump parsing...")
     wiki = WikiCorpus("wiki_dump", lower=False, tokenizer_func=tokenize)
-
+    print("Wiki dump parsed. Let's form the output file...")
     i = 0
     for i, text in enumerate(wiki.get_texts()):
       text = ' '.join([t.decode("utf-8") for t in text])
