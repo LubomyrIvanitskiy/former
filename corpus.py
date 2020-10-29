@@ -1,19 +1,25 @@
 import sys
 from gensim.corpora import WikiCorpus
 
+def tokenize(content, token_min_len, token_max_len, lower):
+    #override original method in wikicorpus.py
+    return [token.encode('utf8').lower() if lower else token.encode('utf8') for token in content.split()
+           if len(token) <= token_max_len and not token.startswith('_')]
 
 def make_corpus(in_f, out_f):
     """Convert Wikipedia xml dump file to text corpus"""
 
     output = open(out_f, 'w')
-    wiki = WikiCorpus(in_f)
+    # https://radimrehurek.com/gensim/corpora/wikicorpus.html
+    # https://stackoverflow.com/questions/50697092/how-to-get-the-wikipedia-corpus-text-with-punctuation-by-using-gensim-wikicorpus
+    wiki = WikiCorpus("wiki_dump", lower=False, tokenizer_func=tokenize)
 
     i = 0
-    for text in wiki.get_texts():
-        output.write(bytes(' '.join(text), 'utf-8').decode('utf-8') + '\n')
-        i = i + 1
-        if (i % 10000 == 0):
-            print('Processed ' + str(i) + ' articles')
+    for i, text in enumerate(wiki.get_texts()):
+      text = ' '.join([t.decode("utf-8") for t in text])
+      output.write(bytes(text, 'utf-8').decode('utf-8') + '\n')
+      if (i % 10000 == 0):
+          print('Processed ' + str(i) + ' articles')
     output.close()
     print('Processing complete!')
 
