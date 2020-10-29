@@ -47,7 +47,7 @@ uk_letters
 char_to_id = {ch:i for i, ch in enumerate(uk_letters)}
 id_to_char = {i:ch for i, ch in enumerate(uk_letters)}
 
-def enwik8(path, n_train=int(695766), n_valid=int(5e4), n_test=int(5e4)):
+def ukwiki(path, n_train=int(764032), n_valid=int(5e4), n_test=int(5e4)):
     """
     Load the enwik8 dataset from the Hutter challenge.
 
@@ -77,7 +77,7 @@ def go(arg):
     # load the data (validation unless arg.final is true, then test)
     arg.data = here('../wiki_uk.txt') if arg.data is None else arg.data
 
-    data_train, data_val, data_test = enwik8(arg.data)
+    data_train, data_val, data_test = ukwiki(arg.data)
     data_train, data_test = (torch.cat([data_train, data_val], dim=0), data_test) \
                             if arg.final else (data_train, data_val)
 
@@ -194,7 +194,6 @@ def go(arg):
 
                 for _ in range(GENSIZE):
                     output = model(input[None, :])
-                    print(output.shape)
                     c = sample(output[0, -1, :], TEMP)
                     print(str(id_to_char[c.item()]), end='', flush=True)
                     input = torch.cat([input[1:], c[None]], dim=0)
@@ -209,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("-N", "--num-batches",
                         dest="num_batches",
                         help="Number of batches to train on. Each batch contains randomly sampled subsequences of the data.",
-                        default=100, type=int)
+                        default=10000, type=int)
 
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
@@ -235,11 +234,11 @@ if __name__ == "__main__":
 
     parser.add_argument("-E", "--embedding", dest="embedding_size",
                         help="Size of the character embeddings.",
-                        default=94, type=int)
+                        default=256, type=int)
 
     parser.add_argument("-H", "--heads", dest="num_heads",
                         help="Number of attention heads.",
-                        default=2, type=int)
+                        default=8, type=int)
 
     parser.add_argument("-C", "--context", dest="context",
                         help="Length of the sequences extracted from the corpus (and the context used during inference).",
@@ -257,7 +256,7 @@ if __name__ == "__main__":
     parser.add_argument("--test-every",
                         dest="test_every",
                         help="How many batches between tests.",
-                        default=20, type=int)
+                        default=500, type=int)
 
     parser.add_argument("--test-subset",
                         dest="test_subset",
