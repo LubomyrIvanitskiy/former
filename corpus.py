@@ -32,4 +32,3 @@ if __name__ == '__main__':
     in_f = sys.argv[1]
     out_f = sys.argv[2]
     make_corpus(in_f, out_f)
-v
