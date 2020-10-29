@@ -100,7 +100,13 @@ def go(arg):
         # sample a batch of random subsequences
         starts = torch.randint(size=(arg.batch_size, ), low=0, high=data_train.size(0) - arg.context - 1)
         seqs_source = [data_train[start  :start+arg.context  ] for start in starts]
-        seqs_target = [data_train[start+1:start+arg.context+1] for start in starts]
+        if arg.masked:
+          seqs_target = seqs_source
+          for s in seqs_target:
+            mask_indexes = torch.randint(1, arg.context, (arg.error_count,))
+            seqs_target[mask_indexes] = 256
+        else:
+          seqs_target = [data_train[start+1:start+arg.context+1] for start in starts]
         source = torch.cat([s[None, :] for s in seqs_source ], dim=0).to(torch.long)
         target = torch.cat([s[None, :] for s in seqs_target ], dim=0).to(torch.long)
         # - target is the same sequence as source, except one character ahead
@@ -282,6 +288,16 @@ if __name__ == "__main__":
                         help="Use wide self attention instead of narrow self attention.",
                         action="store_true",
                         default=False)
+
+    parser.add_argument("--masked",
+                  dest="masked mode",
+                  help="Masked mode. Try to detected masked letter",
+                  default=False, type=int)
+
+    parser.add_argument("--error-count",
+                    dest="error_count",
+                    help="For masked. How many errors available",
+                    default=2, type=int)
 
     options = parser.parse_args()
 
