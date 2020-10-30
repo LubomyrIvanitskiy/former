@@ -1,3 +1,5 @@
+import os
+
 from _context import former
 from former import util, GTransformer
 
@@ -22,6 +24,9 @@ NUM_TOKENS = 128
 # Used for converting between nats and bits
 LOG2E = math.log2(math.e)
 
+MODEL_PATH = "model_saved"
+
+
 def sample(lnprobs, temperature=1.0):
     """
     Sample an element from a categorical distribution
@@ -39,13 +44,15 @@ def sample(lnprobs, temperature=1.0):
 
     return cd.sample()
 
+
 uk_letters = "абвгґдеєжзиійїклмнопрстуфхцчшщьюяqwertyuiopasdfghj"
 uk_letters += uk_letters.upper()
-uk_letters +="',.!?/-:;\" _1234567890+-=$()"
+uk_letters += "',.!?/-:;\" _1234567890+-=$()"
 uk_letters
 
-char_to_id = {ch:i for i, ch in enumerate(uk_letters)}
-id_to_char = {i:ch for i, ch in enumerate(uk_letters)}
+char_to_id = {ch: i for i, ch in enumerate(uk_letters)}
+id_to_char = {i: ch for i, ch in enumerate(uk_letters)}
+
 
 def ukwiki(path, n_train=int(764032), n_valid=int(5e4), n_test=int(5e4)):
     """
@@ -64,28 +71,30 @@ def ukwiki(path, n_train=int(764032), n_valid=int(5e4), n_test=int(5e4)):
         trX, vaX, teX = np.split(X, [n_train, n_train + n_valid])
         return torch.from_numpy(trX), torch.from_numpy(vaX), torch.from_numpy(teX)
 
-def go(arg):
 
+def go(arg):
     if arg.seed < 0:
         seed = random.randint(0, 1000000)
         print('random seed: ', seed)
     else:
         torch.manual_seed(arg.seed)
 
-    tbw = SummaryWriter(log_dir=arg.tb_dir) # Tensorboard logging
+    tbw = SummaryWriter(log_dir=arg.tb_dir)  # Tensorboard logging
 
     # load the data (validation unless arg.final is true, then test)
     arg.data = here('../wiki_uk.txt') if arg.data is None else arg.data
 
     data_train, data_val, data_test = ukwiki(arg.data)
     data_train, data_test = (torch.cat([data_train, data_val], dim=0), data_test) \
-                            if arg.final else (data_train, data_val)
+        if arg.final else (data_train, data_val)
 
     # create the model
-    model = GTransformer(emb=arg.embedding_size, heads=arg.num_heads, depth=arg.depth, seq_length=arg.context, num_tokens=NUM_TOKENS, wide=arg.wide)
+    model = GTransformer(emb=arg.embedding_size, heads=arg.num_heads, depth=arg.depth, seq_length=arg.context,
+                         num_tokens=NUM_TOKENS, wide=arg.wide)
+    if os.path.exists(MODEL_PATH):
+        model.load_state_dict(torch.load(MODEL_PATH))
     if torch.cuda.is_available():
         model.cuda()
-
 
     opt = torch.optim.Adam(lr=arg.lr, params=model.parameters())
     # linear learning rate warmup
@@ -98,17 +107,22 @@ def go(arg):
         opt.zero_grad()
 
         # sample a batch of random subsequences
-        starts = torch.randint(size=(arg.batch_size, ), low=0, high=data_train.size(0) - arg.context - 1)
-        seqs_source = [data_train[start  :start+arg.context  ] for start in starts]
+        starts = torch.randint(size=(arg.batch_size,), low=0, high=data_train.size(0) - arg.context - 1)
         if arg.masked:
-          seqs_target = seqs_source
-          for s in seqs_target:
-            mask_indexes = torch.randint(1, arg.context, (arg.error_count,))
-            seqs_target[mask_indexes] = 256
+            seqs_source = [data_train.detach().clone()[start:start + arg.context, ] for start in starts]
+            seqs_target = [data_train.detach().clone()[start:start + arg.context] for start in starts]
+            for ss, st in zip(seqs_source, seqs_target):
+                mask_indexes = torch.randint(1, arg.context, (arg.error_count,))
+                for ind in mask_indexes:
+                    ss[ind] = torch.tensor(char_to_id['$'])
+                # print(''.join([id_to_char[s.item()] for s in ss]))
+                # print(''.join([id_to_char[t.item()] for t in st]))
         else:
-          seqs_target = [data_train[start+1:start+arg.context+1] for start in starts]
-        source = torch.cat([s[None, :] for s in seqs_source ], dim=0).to(torch.long)
-        target = torch.cat([s[None, :] for s in seqs_target ], dim=0).to(torch.long)
+            seqs_source = [data_train[start:start + arg.context] for start in starts]
+            seqs_target = [data_train[start + 1:start + arg.context + 1] for start in starts]
+
+        source = torch.cat([s[None, :] for s in seqs_source], dim=0).to(torch.long)
+        target = torch.cat([s[None, :] for s in seqs_target], dim=0).to(torch.long)
         # - target is the same sequence as source, except one character ahead
 
         if torch.cuda.is_available():
@@ -140,81 +154,94 @@ def go(arg):
 
             with torch.no_grad():
                 bits, tot = 0.0, 0
-                batch = [] # buffer, every time it fills up, we run it through the model
+                batch = []  # buffer, every time it fills up, we run it through the model
 
-                for current in range(data_sub.size(0)):
+                # for current in range(data_sub.size(0)):
 
-                    fr = max(0, current - arg.context)
-                    to = current + 1
+                #     fr = max(0, current - arg.context)
+                #     to = current + 1
 
-                    context = data_sub[fr:to].to(torch.long)
-                    if context.size(0) < arg.context + 1:
-                        pad = torch.zeros(size=(arg.context + 1 - context.size(0),), dtype=torch.long)
-                        context = torch.cat([pad, context], dim=0)
+                #     context = data_sub[fr:to].to(torch.long)
+                #     if context.size(0) < arg.context + 1:
+                #         pad = torch.zeros(size=(arg.context + 1 - context.size(0),), dtype=torch.long)
+                #         context = torch.cat([pad, context], dim=0)
 
-                        assert context.size(0) == arg.context + 1
+                #         assert context.size(0) == arg.context + 1
 
-                    if torch.cuda.is_available():
-                        context = context.cuda()
+                #     if torch.cuda.is_available():
+                #         context = context.cuda()
 
-                    batch.append(context[None, :])
+                #     batch.append(context[None, :])
 
-                    if len(batch) == arg.test_batchsize or current == data_sub.size(0) - 1:
+                #     if len(batch) == arg.test_batchsize or current == data_sub.size(0) - 1:
 
-                        # batch is full, run it through the model
-                        b = len(batch)
+                #         # batch is full, run it through the model
+                #         b = len(batch)
 
-                        all = torch.cat(batch, dim=0)
-                        source = all[:, :-1] # input
-                        target = all[:, -1]  # target values
+                #         all = torch.cat(batch, dim=0)
+                #         source = all[:, :-1] # input
+                #         target = all[:, -1]  # target values
 
-                        output = model(source)
+                #         output = model(source)
 
-                        lnprobs = output[torch.arange(b, device=d()), -1, target]
-                        log2probs = lnprobs * LOG2E # convert from nats to bits
+                #         lnprobs = output[torch.arange(b, device=d()), -1, target]
+                #         log2probs = lnprobs * LOG2E # convert from nats to bits
 
-                        bits += - log2probs.sum()
-                        batch = [] # empty buffer
+                #         bits += - log2probs.sum()
+                #         batch = [] # empty buffer
 
-                bits_per_byte = bits / data_sub.size(0)
+                # bits_per_byte = bits / data_sub.size(0)
 
-                # print validation performance. 1 bit per byte is (currently) state of the art.
-                print(f'epoch{i}: {bits_per_byte:.4} bits per byte')
-                tbw.add_scalar(f'transformer/eval-loss', bits_per_byte, i * arg.batch_size)
+                # # print validation performance. 1 bit per byte is (currently) state of the art.
+                # print(f'epoch{i}: {bits_per_byte:.4} bits per byte')
+                # tbw.add_scalar(f'transformer/eval-loss', bits_per_byte, i * arg.batch_size)
 
                 # generate some random text
                 GENSIZE = 600
                 TEMP = 0.5
                 seedfr = random.randint(0, data_test.size(0) - arg.context)
-                input = data_test[seedfr:seedfr + arg.context].to(torch.long)
+                # input = data_test[seedfr:seedfr + arg.context].to(torch.long)
+                test_msgs = [
+                    "купила м$ма коника, а коник і шо",
+                    "як тебе не лю$ити Києве мій коли",
+                    "у л$сі лісі темному де ходить як"]
+                for test_msg in test_msgs:
+                    test_data = np.zeros(arg.context)
+                    test_data.fill(110)
+                    test_data[0:len(test_msg)] = np.array([char_to_id[ch] for ch in test_msg])
+                    input = torch.from_numpy(test_data).to(torch.long)
 
-                if torch.cuda.is_available():
-                    input = input.cuda()
+                    if torch.cuda.is_available():
+                        input = input.cuda()
 
-                input = Variable(input)
+                    input = Variable(input)
 
-                print('[', end='', flush=True)
-                for c in input:
-                    print(str(id_to_char[c.item()]), end='', flush=True)
-                print(']', end='', flush=True)
+                    print('[', end='', flush=True)
+                    for c in input:
+                        print(str(id_to_char[c.item()]), end='', flush=True)
+                    print(']', end='', flush=True)
 
-                for _ in range(GENSIZE):
                     output = model(input[None, :])
-                    c = sample(output[0, -1, :], TEMP)
-                    print(str(id_to_char[c.item()]), end='', flush=True)
-                    input = torch.cat([input[1:], c[None]], dim=0)
+                    out_string = ''.join([id_to_char[ind.item()] for ind in output[0].max(axis=1).indices])
+                    # c = sample(output[0].max(axis=1), TEMP)
+                    print("Foo1")
+                    print("PRED: " + out_string)
 
-                print()
+                    print("Foo2")
+                    print()
+
+        # Save model
+        torch.save(model.state_dict(), MODEL_PATH)
+
 
 if __name__ == "__main__":
-
     ## Parse the command line options
     parser = ArgumentParser()
 
     parser.add_argument("-N", "--num-batches",
                         dest="num_batches",
                         help="Number of batches to train on. Each batch contains randomly sampled subsequences of the data.",
-                        default=100000, type=int)
+                        default=20, type=int)
 
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
@@ -248,7 +275,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-C", "--context", dest="context",
                         help="Length of the sequences extracted from the corpus (and the context used during inference).",
-                        default=256, type=int)
+                        default=32, type=int)
 
     parser.add_argument("-d", "--depth", dest="depth",
                         help="Depth of the network (nr of self-attention layers)",
@@ -262,7 +289,7 @@ if __name__ == "__main__":
     parser.add_argument("--test-every",
                         dest="test_every",
                         help="How many batches between tests.",
-                        default=2000, type=int)
+                        default=20, type=int)
 
     parser.add_argument("--test-subset",
                         dest="test_subset",
@@ -290,14 +317,14 @@ if __name__ == "__main__":
                         default=False)
 
     parser.add_argument("--masked",
-                  dest="masked mode",
-                  help="Masked mode. Try to detected masked letter",
-                  default=False, type=int)
+                        dest="masked",
+                        help="Masked mode. Try to detected masked letter",
+                        default=True)
 
     parser.add_argument("--error-count",
-                    dest="error_count",
-                    help="For masked. How many errors available",
-                    default=2, type=int)
+                        dest="error_count",
+                        help="For masked. How many errors available",
+                        default=1, type=int)
 
     options = parser.parse_args()
 
