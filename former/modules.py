@@ -165,16 +165,22 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x):
 
+        residual = x
+
         attended = self.attention(x)
 
         x = self.norm1(attended + x)
 
         x = self.do(x)
 
+        x += residual
+
         fedforward = self.ff(x)
 
         x = self.norm2(fedforward + x)
 
         x = self.do(x)
+
+        x += residual
 
         return x
